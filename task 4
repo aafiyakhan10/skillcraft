@@ -1,0 +1,63 @@
+import tkinter as tk
+from tkinter import messagebox
+from pynput import keyboard
+from datetime import datetime
+import threading
+import os
+
+# Generate unique filename per session
+timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+LOG_FILE = f"key_log_{timestamp}.txt"
+
+# Global listener reference
+listener = None
+
+# Flag to track logging state
+is_logging = False
+
+def on_press(key):
+    try:
+        key_str = f"{key.char}"
+    except AttributeError:
+        key_str = f"[{key.name}]"
+    log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {key_str}\n"
+    with open(LOG_FILE, "a") as f:
+        f.write(log_entry)
+
+def on_release(key):
+    if key == keyboard.Key.esc:
+        stop_logging()
+        return False
+
+def start_logging():
+    global listener, is_logging
+    if is_logging:
+        messagebox.showinfo("Logger", "Logging is already running.")
+        return
+    is_logging = True
+    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+    threading.Thread(target=listener.start, daemon=True).start()
+    status_label.config(text=f"Logging to: {LOG_FILE}", fg="green")
+
+def stop_logging():
+    global listener, is_logging
+    if listener:
+        listener.stop()
+        listener = None
+    is_logging = False
+    status_label.config(text="Logging stopped", fg="red")
+    messagebox.showinfo("Logger", f"Logging stopped. Data saved to:\n{LOG_FILE}")
+
+# GUI Setup
+root = tk.Tk()
+root.title("Keyboard Logger (Ethical Use Only)")
+
+tk.Label(root, text="Keyboard Event Logger", font=("Arial", 14)).pack(pady=10)
+status_label = tk.Label(root, text="Not logging", fg="red")
+status_label.pack(pady=5)
+
+tk.Button(root, text="Start Logging", command=start_logging, bg="lightgreen").pack(pady=5)
+tk.Button(root, text="Stop Logging", command=stop_logging, bg="lightcoral").pack(pady=5)
+tk.Button(root, text="Exit", command=lambda: [stop_logging(), root.destroy()]).pack(pady=10)
+
+root.mainloop()
