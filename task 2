@@ -1,0 +1,111 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from PIL import Image, ImageTk
+import random
+import os
+
+def caesar_add(val, key, mode='encrypt'):
+    return (val + key) % 256 if mode == 'encrypt' else (val - key) % 256
+
+def encrypt_decrypt_image(img_path, output_path, operation, key=None, mode='encrypt', swapkey_file=None):
+    img = Image.open(img_path)
+    pixels = list(img.getdata())
+
+    if operation == "invert":
+        new_pixels = [(255 - r, 255 - g, 255 - b) for r, g, b in pixels]
+
+    elif operation == "add":
+        value = int(key) if key else 10
+        new_pixels = [(caesar_add(r, value, mode), caesar_add(g, value, mode), caesar_add(b, value, mode)) for r, g, b in pixels]
+
+    elif operation == "swap":
+        total = len(pixels)
+        indices = list(range(total))
+
+        if mode == 'encrypt':
+            random.seed(int(key))
+            random.shuffle(indices)
+            new_pixels = [pixels[i] for i in indices]
+            with open(swapkey_file, "w") as f:
+                f.write(','.join(map(str, indices)))
+        else:
+            with open(swapkey_file, "r") as f:
+                indices = list(map(int, f.read().split(',')))
+            reverse = [0] * total
+            for i, idx in enumerate(indices):
+                reverse[idx] = i
+            new_pixels = [pixels[i] for i in reverse]
+    else:
+        raise ValueError("Unsupported operation.")
+
+    new_img = Image.new(img.mode, img.size)
+    new_img.putdata(new_pixels)
+    new_img.save(output_path)
+    return output_path
+
+# GUI Functions
+def load_image():
+    file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp")])
+    if file_path:
+        global image_path
+        image_path = file_path
+        img = Image.open(file_path)
+        img.thumbnail((300, 300))
+        tk_img = ImageTk.PhotoImage(img)
+        canvas.image = tk_img
+        canvas.create_image(150, 150, image=tk_img)
+        path_label.config(text=os.path.basename(file_path))
+
+def run_operation(mode):
+    if not image_path:
+        messagebox.showerror("Error", "Please load an image first.")
+        return
+
+    operation = operation_var.get()
+    key = key_entry.get()
+    out_file = filedialog.asksaveasfilename(defaultextension=".png")
+
+    if not out_file:
+        return
+
+    try:
+        swapkey_file = out_file + "_swapkey.txt" if operation == "swap" else None
+        result = encrypt_decrypt_image(
+            image_path, out_file,
+            operation=operation,
+            key=key,
+            mode=mode,
+            swapkey_file=swapkey_file
+        )
+        messagebox.showinfo("Success", f"{mode.capitalize()}ed image saved to:\n{result}")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+# GUI Setup
+image_path = ""
+root = tk.Tk()
+root.title("Image Encryption Tool")
+
+frame = tk.Frame(root)
+frame.pack(padx=10, pady=10)
+
+tk.Button(frame, text="Load Image", command=load_image).grid(row=0, column=0, columnspan=2)
+
+canvas = tk.Canvas(frame, width=300, height=300, bg="gray")
+canvas.grid(row=1, column=0, columnspan=2, pady=10)
+
+path_label = tk.Label(frame, text="No image loaded")
+path_label.grid(row=2, column=0, columnspan=2)
+
+tk.Label(frame, text="Operation:").grid(row=3, column=0, sticky="e")
+operation_var = tk.StringVar(value="invert")
+tk.OptionMenu(frame, operation_var, "invert", "add", "swap").grid(row=3, column=1)
+
+tk.Label(frame, text="Key (for 'add' or 'swap'):").grid(row=4, column=0, sticky="e")
+key_entry = tk.Entry(frame)
+key_entry.grid(row=4, column=1)
+
+tk.Button(frame, text="Encrypt", command=lambda: run_operation('encrypt')).grid(row=5, column=0, pady=10)
+tk.Button(frame, text="Decrypt", command=lambda: run_operation('decrypt')).grid(row=5, column=1, pady=10)
+
+root.mainloop()
